@@ -1,0 +1,6 @@
+# Uploaded user files in uploads except directory placeholders
+uploads/*
+!uploads/members/
+!uploads/receipts/
+!uploads/activities/
+!uploads/media/
