@@ -50,10 +50,15 @@ class Database {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
                 PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES " . DB_CHARSET,
-                PDO::ATTR_TIMEOUT            => 5
+                PDO::ATTR_TIMEOUT            => 6
             ];
 
-            // If SSL CA certificate provided for cloud MySQL
+            // For cloud MySQL (TiDB Cloud, Aiven, PlanetScale, AWS RDS) SSL compatibility
+            if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+            }
+
+            // If explicit SSL CA certificate provided for cloud MySQL
             $sslCa = $_ENV['MYSQL_SSL_CA'] ?? $_SERVER['MYSQL_SSL_CA'] ?? getenv('MYSQL_SSL_CA');
             if ($sslCa) {
                 $options[PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
@@ -61,6 +66,7 @@ class Database {
 
             try {
                 self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
+                self::autoMigrateIfEmpty(self::$instance);
             } catch (PDOException $e) {
                 // If running on Vercel without cloud DB configured yet, render helpful setup dashboard
                 if ($isVercel) {
@@ -76,6 +82,32 @@ class Database {
             }
         }
         return self::$instance;
+    }
+
+    /**
+     * Automatically creates tables and seeds Super Admin if database is empty
+     */
+    public static function autoMigrateIfEmpty(PDO $pdo): void {
+        try {
+            $tableCheck = $pdo->query("SHOW TABLES LIKE 'users'")->fetch();
+            if ($tableCheck) {
+                return; // Database already has tables initialized
+            }
+
+            $sqlFile = dirname(__DIR__) . '/database/racic_church_management.sql';
+            if (!file_exists($sqlFile)) {
+                return;
+            }
+
+            $sql = file_get_contents($sqlFile);
+            // Strip database creation/selection commands for cloud compatibility
+            $sql = preg_replace('/^CREATE DATABASE[^;]+;/mi', '', $sql);
+            $sql = preg_replace('/^USE[^;]+;/mi', '', $sql);
+
+            $pdo->exec($sql);
+        } catch (\Throwable $t) {
+            error_log("RACIC Database Auto-Migration: " . $t->getMessage());
+        }
     }
 
     private static function renderVercelDbSetupGuide(string $errorMessage): void {
@@ -131,55 +163,48 @@ class Database {
                     <p class="small text-white-50 mb-0">Royal Ambassadors of Christ International Church (RACIC)</p>
                 </div>
                 <div class="p-4 p-md-5">
-                    <div class="alert alert-warning small mb-4">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Why you see this:</strong> Your application code successfully deployed to Vercel! However, Vercel runs on cloud serverless functions where <code>localhost</code> has no local MySQL service. You must link a free cloud MySQL database.
+                    <div class="alert alert-info small mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Vercel Deployment Successful!</strong> Your RACIC application code is live. Because Vercel serverless runs without a local MySQL service, simply link any free cloud MySQL database below. <strong>Schema creation and Super Admin setup are 100% automated!</strong>
                     </div>
 
-                    <h6 class="fw-bold text-dark mb-3">Quick 3-Minute Setup:</h6>
+                    <h6 class="fw-bold text-dark mb-3">Simple 2-Minute Link:</h6>
                     
                     <div class="d-flex gap-3 mb-3">
                         <div class="step-num">1</div>
                         <div>
                             <strong>Get a Free Cloud MySQL Database</strong>
-                            <p class="small text-muted mb-1">Sign up at any free MySQL provider (takes 1 minute):</p>
+                            <p class="small text-muted mb-1">Sign up at any free MySQL provider (no credit card required):</p>
                             <div class="d-flex gap-2 flex-wrap">
                                 <a href="https://tidbcloud.com/" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-external-link-alt me-1"></i>TiDB Cloud (Free Serverless MySQL)</a>
                                 <a href="https://aiven.io/" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-external-link-alt me-1"></i>Aiven Free MySQL</a>
-                                <a href="https://railway.app/" target="_blank" class="btn btn-sm btn-outline-dark"><i class="fas fa-external-link-alt me-1"></i>Railway MySQL</a>
+                                <a href="https://freedb.tech/" target="_blank" class="btn btn-sm btn-outline-dark"><i class="fas fa-external-link-alt me-1"></i>FreeDB MySQL</a>
                             </div>
                         </div>
                     </div>
 
-                    <div class="d-flex gap-3 mb-3">
+                    <div class="d-flex gap-3 mb-4">
                         <div class="step-num">2</div>
                         <div>
-                            <strong>Import the RACIC Database Schema</strong>
-                            <p class="small text-muted mb-0">Import the SQL file from your repository: <code>database/racic_church_management.sql</code> into your cloud database.</p>
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-3 mb-4">
-                        <div class="step-num">3</div>
-                        <div>
-                            <strong>Add Variables in Vercel Dashboard</strong>
-                            <p class="small text-muted mb-2">Go to <strong>Vercel Dashboard &rarr; Project Settings &rarr; Environment Variables</strong>, then add either <code>DATABASE_URL</code> or these variables:</p>
-                            <table class="table table-sm table-bordered font-monospace small mb-0">
-                                <thead class="table-light"><tr><th>Variable Name</th><th>Value</th></tr></thead>
+                            <strong>Add Connection Variable in Vercel</strong>
+                            <p class="small text-muted mb-2">Go to <strong>Vercel Dashboard &rarr; Project Settings &rarr; Environment Variables</strong>, then add your database connection (either <code>DATABASE_URL</code> or these variables):</p>
+                            <table class="table table-sm table-bordered font-monospace small mb-2">
+                                <thead class="table-light"><tr><th>Variable Name</th><th>Value Example</th></tr></thead>
                                 <tbody>
-                                    <tr><td>DB_HOST</td><td>Your cloud database host</td></tr>
-                                    <tr><td>DB_PORT</td><td>3306 (or cloud port)</td></tr>
-                                    <tr><td>DB_NAME</td><td>racic_church_management</td></tr>
-                                    <tr><td>DB_USER</td><td>Your database username</td></tr>
-                                    <tr><td>DB_PASS</td><td>Your database password</td></tr>
+                                    <tr><td>DB_HOST</td><td>gateway01.us-east-1.prod.aws.tidbcloud.com</td></tr>
+                                    <tr><td>DB_PORT</td><td>4000 (or 3306)</td></tr>
+                                    <tr><td>DB_NAME</td><td>racic_church_management (or default)</td></tr>
+                                    <tr><td>DB_USER</td><td>your_db_username</td></tr>
+                                    <tr><td>DB_PASS</td><td>your_db_password</td></tr>
                                 </tbody>
                             </table>
+                            <small class="text-success"><i class="fas fa-magic me-1"></i><strong>Automated:</strong> The system will automatically detect the database, create all 23 tables, configure roles, and seed your Super Admin account (<code>RACIC</code> / <code>AMBASSADORS</code>)!</small>
                         </div>
                     </div>
 
                     <div class="border-top pt-3 text-center">
-                        <small class="text-muted d-block mb-2">After adding the variables, click <strong>Redeploy</strong> in Vercel.</small>
-                        <a href="/" class="btn btn-primary px-4 shadow-sm"><i class="fas fa-redo me-1"></i>Test Connection / Reload</a>
+                        <small class="text-muted d-block mb-2">After adding variables in Vercel, click <strong>Redeploy</strong> in Vercel, then refresh this page:</small>
+                        <a href="/" class="btn btn-primary px-4 shadow-sm"><i class="fas fa-redo me-1"></i>Refresh & Launch System</a>
                     </div>
                 </div>
             </div>
