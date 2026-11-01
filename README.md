@@ -142,7 +142,7 @@ c:\xampp\htdocs\RACIC/
 
 ---
 
-## 4. How to Access the System
+## 4. How to Access the System Locally (XAMPP)
 
 1. Start **Apache** and **MySQL** in your XAMPP Control Panel.
 2. Open your web browser and navigate to:
@@ -152,3 +152,15 @@ c:\xampp\htdocs\RACIC/
 3. Sign in using the Super Admin credentials:
    - **Username**: `RACIC`
    - **Password**: `AMBASSADORS`
+
+---
+
+## 5. Vercel Serverless Deployment
+
+When deploying to Vercel:
+1. Connect your GitHub repository (`https://github.com/sylvester-code/RACIC-.git`) to Vercel.
+2. In **Vercel Dashboard &rarr; Project Settings &rarr; Environment Variables**, add your cloud MySQL connection string:
+   - `DATABASE_URL` (e.g. from TiDB Cloud, Aiven, or Railway)
+   - Or add `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`.
+3. **Automated Migration**: You do not need to manually run SQL scripts! The system detects an empty cloud database on first connect and automatically creates all 23 tables, roles, permissions, and the initial Super Admin account (`RACIC` / `AMBASSADORS`).
+4. Click **Redeploy** on Vercel and your live system is ready.
