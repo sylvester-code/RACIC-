@@ -1,6 +1,10 @@
 <?php
 // api/index.php - Serverless Entrypoint & Request Router for Vercel
 
+if (!ob_get_level()) {
+    ob_start();
+}
+
 $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
 $path = parse_url($requestUri, PHP_URL_PATH);
 $path = trim($path, '/');
@@ -9,7 +13,7 @@ $rootDir = dirname(__DIR__);
 
 // Route mapping
 if ($path === '' || $path === 'index.php') {
-    require $rootDir . '/index.php';
+    require_once $rootDir . '/index.php';
     exit;
 }
 
@@ -22,7 +26,7 @@ if (is_dir($targetFile)) {
 
 if (file_exists($targetFile) && pathinfo($targetFile, PATHINFO_EXTENSION) === 'php') {
     chdir(dirname($targetFile));
-    require $targetFile;
+    require_once $targetFile;
     exit;
 }
 

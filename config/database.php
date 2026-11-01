@@ -8,12 +8,12 @@ $dbName = getenv('DB_NAME') ?: (getenv('MYSQLDATABASE') ?: 'racic_church_managem
 $dbUser = getenv('DB_USER') ?: (getenv('MYSQLUSER') ?: 'root');
 $dbPass = getenv('DB_PASS') ?: (getenv('MYSQLPASSWORD') ?: '');
 
-define('DB_HOST', $dbHost);
-define('DB_PORT', $dbPort);
-define('DB_NAME', $dbName);
-define('DB_USER', $dbUser);
-define('DB_PASS', $dbPass);
-define('DB_CHARSET', 'utf8mb4');
+if (!defined('DB_HOST')) define('DB_HOST', $dbHost);
+if (!defined('DB_PORT')) define('DB_PORT', $dbPort);
+if (!defined('DB_NAME')) define('DB_NAME', $dbName);
+if (!defined('DB_USER')) define('DB_USER', $dbUser);
+if (!defined('DB_PASS')) define('DB_PASS', $dbPass);
+if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 
 class Database {
     private static ?PDO $instance = null;
@@ -47,6 +47,8 @@ class Database {
     }
 }
 
-function getDB(): PDO {
-    return Database::getConnection();
+if (!function_exists('getDB')) {
+    function getDB(): PDO {
+        return Database::getConnection();
+    }
 }
